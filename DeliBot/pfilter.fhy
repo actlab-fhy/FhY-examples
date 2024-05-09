@@ -1,0 +1,55 @@
+// =============================================================================
+// Low-Variance Sampling algorithm from "Probabilistic Robotics"
+// =============================================================================
+
+// =============================================================================
+// Example C++ Function Body for _resample_body
+// =============================================================================
+//
+// double M_reciprocal = 1.0 / numParticles;
+// double r = ... ;
+// double c = w_in[0];
+// int i = 0;
+//
+// for (int m = 0; m < numParticles; m++) {
+//     double u = r + m * M_reciprocal;
+//     while (u > c) {
+//         i++;
+//         c += w_in[i];
+//     }
+//     x_out[m] = x_in[i];
+//     y_out[m] = y_in[i];
+//     theta_out[m] = theta_in[i];
+//     w_out[m] = w_in[i];
+// }
+//
+native _resample_body(
+    input  float64[numParticles],
+    input  float64[numParticles],
+    input  float64[numParticles],
+    input  float64[numParticles],
+    output float64[numParticles],
+    output float64[numParticles],
+    output float64[numParticles],
+    output float64[numParticles]
+);
+
+proc resample(
+    input  float64[numParticles] x_in,
+    input  float64[numParticles] y_in,
+    input  float64[numParticles] theta_in,
+    input  float64[numParticles] w_in,
+    output float64[numParticles] x_out,
+    output float64[numParticles] y_out,
+    output float64[numParticles] theta_out,
+    output float64[numParticles] w_out
+) {
+    temp float64[numParticles] w_in_new;
+
+    temp index[1:numParticles] i;
+
+    temp float64 wSum = sum[i](w[i]);
+    w_in_new[i] = w[i] / wSum;
+    _resample_body(x_in, y_in, theta_in, w_in_new,
+                   x_out, y_out, theta_out, w_out);
+}
