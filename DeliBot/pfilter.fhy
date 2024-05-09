@@ -52,4 +52,22 @@ proc resample(
     w_in_new[i] = w[i] / wSum;
     _resample_body(x_in, y_in, theta_in, w_in_new,
                    x_out, y_out, theta_out, w_out);
+
+    ######## 
+    ### Need an user_define natives to express code that can not be compiled to accelerator 
+    ### the mechanism is not clear for now 
+
+    ''' c++ code
+    for (int m = 0; m < this->numParticles; m++) {
+        double u = r + m * M1;
+        while (u > c) {
+            i++;
+            c += this->particles[i].w;
+        }
+        newParticles.push_back(this->particles[i]);
+    }
+    '''
+
+
+    ########
 }
