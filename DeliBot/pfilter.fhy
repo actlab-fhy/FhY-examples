@@ -1,28 +1,28 @@
-// =============================================================================
-// Low-Variance Sampling algorithm from "Probabilistic Robotics"
-// =============================================================================
+# =============================================================================
+# Low-Variance Sampling algorithm from "Probabilistic Robotics"
+# =============================================================================
 
-// =============================================================================
-// Example C++ Function Body for _resample_body
-// =============================================================================
-//
-// double M_reciprocal = 1.0 / numParticles;
-// double r = ... ;
-// double c = w_in[0];
-// int i = 0;
-//
-// for (int m = 0; m < numParticles; m++) {
-//     double u = r + m * M_reciprocal;
-//     while (u > c) {
-//         i++;
-//         c += w_in[i];
-//     }
-//     x_out[m] = x_in[i];
-//     y_out[m] = y_in[i];
-//     theta_out[m] = theta_in[i];
-//     w_out[m] = w_in[i];
-// }
-//
+# =============================================================================
+# Example C++ Function Body for _resample_body
+# =============================================================================
+#
+# double M_reciprocal = 1.0 / numParticles;
+# double r = ... ;
+# double c = w_in[0];
+# int i = 0;
+#
+# for (int m = 0; m < numParticles; m++) {
+#     double u = r + m * M_reciprocal;
+#     while (u > c) {
+#         i++;
+#         c += w_in[i];
+#     }
+#     x_out[m] = x_in[i];
+#     y_out[m] = y_in[i];
+#     theta_out[m] = theta_in[i];
+#     w_out[m] = w_in[i];
+# }
+#
 native _resample_body(
     input  float64[numParticles],
     input  float64[numParticles],
@@ -53,21 +53,16 @@ proc resample(
     _resample_body(x_in, y_in, theta_in, w_in_new,
                    x_out, y_out, theta_out, w_out);
 
-    ######## 
-    ### Need an user_define natives to express code that can not be compiled to accelerator 
-    ### the mechanism is not clear for now 
+    # Need an user_define natives to express code that can not be compiled to accelerator
+    # the mechanism is not clear for now
 
-    ''' c++ code
-    for (int m = 0; m < this->numParticles; m++) {
-        double u = r + m * M1;
-        while (u > c) {
-            i++;
-            c += this->particles[i].w;
-        }
-        newParticles.push_back(this->particles[i]);
-    }
-    '''
-
-
-    ########
+    # c++ code
+    # for (int m = 0; m < this->numParticles; m++) {
+    #     double u = r + m * M1;
+    #     while (u > c) {
+    #         i++;
+    #         c += this->particles[i].w;
+    #     }
+    #     newParticles.push_back(this->particles[i]);
+    # }
 }
