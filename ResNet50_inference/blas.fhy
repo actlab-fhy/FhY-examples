@@ -1,0 +1,15 @@
+# transA = 'N', transB = 'N'
+op SGEMM_1<T>(
+    input T alpha,
+    input T[M, K] A,
+    input T[K, N] B,
+    input T beta,
+    input T[M, N] C
+) -> output T[M, N] {
+    temp index[1:M] m;
+    temp index[1:N] n;
+    temp index[1:K] k;
+    return alpha * sum[k](A[m, k] * B[k, n])[m, n] + beta * C[m, n];
+}
+
+# TODO: add SGEMM for other cases of transA and transB

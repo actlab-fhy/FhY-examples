@@ -1,0 +1,189 @@
+import blas.SGEMM_1;
+
+# TODO: use math functions from the built-in math library when available
+op _exp(
+    input float32 x
+) -> output float32 {
+    param float32 e = 2.71828;
+    return e ** x;
+}
+
+op _sqrt(
+    input float32 x
+) -> output float32 {
+    return x ** 0.5;
+}
+
+
+
+op _expectation(
+    input float32[N, C, H, W] X
+) -> output float32[N] {
+    temp index[1:N] n;
+    temp index[1:C] c;
+    temp index[1:H] h;
+    temp index[1:W] w;
+    return sum[c, h, w](X[n, c, h, w]) / (C * H * W)
+}
+
+op _variance(
+    input float32[N, C, H, W] X
+) -> output float32[N] {
+    temp index[1:N] n;
+    temp index[1:C] c;
+    temp index[1:H] h;
+    temp index[1:W] w;
+    temp float32[N] E = _expectation(X);
+    return sum[c, h, w]((X[n, c, h, w] - E[n]) ** 2)[n] / (C * H * W - 1)
+}
+
+op _pad(
+    param tuple[int64, int64] padding,
+    input float32 [N, C, H, W] X
+) -> output float32[N, C, H + 2 * padding.0, W + 2 * padding.1] {
+    temp index[1:N] n;
+    temp index[1:C] c;
+    temp index[1:padding.1] padding_x_lower;
+    temp index[W + 1:W + padding.1] padding_x_upper;
+    temp index[1:padding.0] padding_y_lower;
+    temp index[H + 1:H + padding.0] padding_y_upper;
+    temp float32[N, C, IH + 2 * padding.0, IW + 2 * padding.1] X_padded;
+
+    X_padded[n, c, padding_y_lower, padding_x_lower] = 0.0;
+    X_padded[n, c, padding_y_upper, padding_x_upper] = 0.0;
+
+    return X_padded;
+}
+
+op add(
+    input float32[N, C, H, W] A,
+    input float32[N, C, H, W] B
+) -> output float32[N, C, H, W] {
+    temp index[1:N] n;
+    temp index[1:C] c;
+    temp index[1:H] h;
+    temp index[1:W] w;
+
+    return A[n, c, h, w] + B[n, c, h, w];
+}
+
+# TODO: implement dilation
+op avgpool(
+    param tuple[int64, int64] strides,
+    param tuple[int64, int64] padding,
+    param tuple[int64, int64] dilation,
+    input float32[N, C, H, W] X
+) -> output float32[N, C, (H + 2 * padding.0 - dilation.0 * (KH - 1) - 1) // strides.0 + 1, (W + 2 * padding.1 - dilation.1 * (KW - 1) - 1) // strides.1 + 1] {
+    temp index[1:N] n;
+    temp index[1:C] c;
+    temp index[1:KH] kh;
+    temp index[1:KW] kw;
+    temp index[1:(H + 2 * padding.0 - dilation.0 * (KH - 1) - 1) // strides.0 + 1] oh;
+    temp index[1:(W + 2 * padding.1 - dilation.1 * (KW - 1) - 1) // strides.1 + 1] ow;
+    temp float32[N, C, H + 2 * padding.0, W + 2 * padding.1] X_padded = _pad(padding, X);
+
+    return sum[kh, kw](X_padded[n, c, strides.0 * oh + kh, strides.1 * ow + kw])[n, c, oh, ow] / (KH * KW)
+}
+
+op batchnorm(
+    param float32 eps,
+    param float32 gamma,
+    param float32 beta,
+    input float32[N, C, H, W] X
+) -> output float32[N, C, H, W] {
+    temp index[1:N] n;
+    temp index[1:C] c;
+    temp index[1:H] h;
+    temp index[1:W] w;
+
+    temp float32[N] E = _expectation(X);
+    temp float32[N] V = _variance(X);
+
+    return gamma * (X[n, c, h, w] - E[n]) / _sqrt(V[n] + eps) + beta;
+}
+
+# TODO: implement groups and dilation
+# TODO: implement padding techniques other than 0's
+op conv(
+    param tuple[int64, int64] strides,
+    param tuple[int64, int64] padding,
+    param tuple[int64, int64] dilation,
+    param int64 groups,
+    input float32[N, IC, H, W] X,
+    param float32[OC, IC // groups, KH, KW] W,
+    param float32[OC] B
+) -> output float32[N, OC, (H + 2 * padding.0 - dilation.0 * (KH - 1) - 1) // strides.0 + 1, (W + 2 * padding.1 - dilation.1 * (KW - 1) - 1) // strides.1 + 1] {
+    temp index[1:N] n;
+    temp index[1:IC] ic;
+    temp index[1:OC] oc;
+    temp index[1:KH] kh;
+    temp index[1:KW] kw;
+    temp index[1:(H + 2 * padding.0 - dilation.0 * (KH - 1) - 1) // strides.0 + 1] oh;
+    temp index[1:(W + 2 * padding.1 - dilation.1 * (KW - 1) - 1) // strides.1 + 1] ow;
+    temp float32[N, C, H + 2 * padding.0, W + 2 * padding.1] X_padded = _pad(padding, X);
+
+    return sum[ic, kh, kw](X_padded[n, ic, strides.0 * oh + kh, strides.1 * ow + kw] * W[oc, ic, kh, kw])[n, oc, oh, ow] + B[oc];
+}
+
+op fc(
+    input float32[N, I] X,
+    param float32[I, O] W,
+    param float32[O] B
+) -> output float32[N, O] {
+    temp index[1:N] n;
+    temp index[1:O] o;
+    temp float32[N, O] _B;
+
+    _B[n, o] = B[o];
+    return SGEMM_1<float32>(1.0, X, W, 1.0, _B);
+}
+
+op flatten(
+    input float32[N, C, H, W] I
+) -> output float32[N, C * H * W] {
+    temp index[1:N] n;
+    temp index[1:C] c;
+    temp index[1:H] h;
+    temp index[1:W] w;
+    temp float32[N, C * H * W] O;
+    O[N, (H * W) * (c - 1) + (W) * (h - 1) + w] = I[n, c, h, w];
+    return O;
+}
+
+# TODO: implement dilation
+op maxpool(
+    param tuple[int64, int64] strides,
+    param tuple[int64, int64] padding,
+    param tuple[int64, int64] dilation,
+    input float32[N, C, H, W] X
+) -> output float32[N, C, (H + 2 * padding.0 - dilation.0 * (KH - 1) - 1) // strides.0 + 1, (W + 2 * padding.1 - dilation.1 * (KW - 1) - 1) // strides.1 + 1] {
+    temp index[1:N] n;
+    temp index[1:C] c;
+    temp index[1:KH] kh;
+    temp index[1:KW] kw;
+    temp index[1:(H + 2 * padding.0 - dilation.0 * (KH - 1) - 1) // strides.0 + 1] oh;
+    temp index[1:(W + 2 * padding.1 - dilation.1 * (KW - 1) - 1) // strides.1 + 1] ow;
+    temp float32[N, C, H + 2 * padding.0, W + 2 * padding.1] X_padded = _pad(padding, X);
+
+    return max[kh, kw](X_padded[n, c, strides.0 * oh + kh, strides.1 * ow + kw])
+}
+
+op relu(
+    input float32[N, C, H, W] X
+) -> output float32[N, C, H, W] {
+    temp index[1:N] n;
+    temp index[1:C] c;
+    temp index[1:H] h;
+    temp index[1:W] w;
+
+    return X[n, c, h, w] > 0.0 ? X[n, c, h, w] : 0.0;
+}
+
+op softmax(
+    input float32[N, M] X
+) -> output float32[N, M] {
+    temp index[1:N] n;
+    temp index[1:M] m;
+
+    return (_exp(X[n, m])) / sum[m](_exp(X[n, m]));
+}
