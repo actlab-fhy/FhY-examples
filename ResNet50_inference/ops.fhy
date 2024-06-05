@@ -23,7 +23,7 @@ op _expectation(
     temp index[1:C] c;
     temp index[1:H] h;
     temp index[1:W] w;
-    return sum[c, h, w](X[n, c, h, w]) / (C * H * W)
+    return sum[c, h, w](X[n, c, h, w]) / (C * H * W);
 }
 
 op _variance(
@@ -34,7 +34,7 @@ op _variance(
     temp index[1:H] h;
     temp index[1:W] w;
     temp float32[N] E = _expectation(X);
-    return sum[c, h, w]((X[n, c, h, w] - E[n]) ** 2)[n] / (C * H * W - 1)
+    return sum[c, h, w]((X[n, c, h, w] - E[n]) ** 2)[n] / (C * H * W - 1);
 }
 
 op _pad(
@@ -82,7 +82,7 @@ op avgpool(
     temp index[1:(W + 2 * padding.1 - dilation.1 * (KW - 1) - 1) // strides.1 + 1] ow;
     temp float32[N, C, H + 2 * padding.0, W + 2 * padding.1] X_padded = _pad(padding, X);
 
-    return sum[kh, kw](X_padded[n, c, strides.0 * oh + kh, strides.1 * ow + kw])[n, c, oh, ow] / (KH * KW)
+    return sum[kh, kw](X_padded[n, c, strides.0 * oh + kh, strides.1 * ow + kw])[n, c, oh, ow] / (KH * KW);
 }
 
 op batchnorm(
@@ -165,7 +165,7 @@ op maxpool(
     temp index[1:(W + 2 * padding.1 - dilation.1 * (KW - 1) - 1) // strides.1 + 1] ow;
     temp float32[N, C, H + 2 * padding.0, W + 2 * padding.1] X_padded = _pad(padding, X);
 
-    return max[kh, kw](X_padded[n, c, strides.0 * oh + kh, strides.1 * ow + kw])
+    return max[kh, kw](X_padded[n, c, strides.0 * oh + kh, strides.1 * ow + kw]);
 }
 
 op relu(
