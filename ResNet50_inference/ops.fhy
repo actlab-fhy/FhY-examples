@@ -1,6 +1,6 @@
 import blas.SGEMM_1;
 
-# TODO: use math functions from the built-in math library when available
+# TODO: Use built-in exp function when available
 op _exp(
     input float32 x
 ) -> output float32 {
@@ -8,13 +8,12 @@ op _exp(
     return e ** x;
 }
 
+# TODO: Use built-in sqrt function when available
 op _sqrt(
     input float32 x
 ) -> output float32 {
     return x ** 0.5;
 }
-
-
 
 op _expectation(
     input float32[N, C, H, W] X
@@ -43,12 +42,15 @@ op _pad(
 ) -> output float32[N, C, H + 2 * padding.0, W + 2 * padding.1] {
     temp index[1:N] n;
     temp index[1:C] c;
+    temp index[1:H] h;
+    temp index[1:W] w;
     temp index[1:padding.1] padding_x_lower;
     temp index[W + 1:W + padding.1] padding_x_upper;
     temp index[1:padding.0] padding_y_lower;
     temp index[H + 1:H + padding.0] padding_y_upper;
     temp float32[N, C, IH + 2 * padding.0, IW + 2 * padding.1] X_padded;
 
+    X_padded[n, c, h, w] = X[n, c, h, w];
     X_padded[n, c, padding_y_lower, padding_x_lower] = 0.0;
     X_padded[n, c, padding_y_upper, padding_x_upper] = 0.0;
 
@@ -72,14 +74,20 @@ op avgpool(
     param tuple[int64, int64] strides,
     param tuple[int64, int64] padding,
     param tuple[int64, int64] dilation,
+    param tuple[int64, int64] kernel_size,
     input float32[N, C, H, W] X
-) -> output float32[N, C, (H + 2 * padding.0 - dilation.0 * (KH - 1) - 1) // strides.0 + 1, (W + 2 * padding.1 - dilation.1 * (KW - 1) - 1) // strides.1 + 1] {
+) -> output float32[
+    N,
+    C,
+    (H + 2 * padding.0 - dilation.0 * (kernel_size.0 - 1) - 1) // strides.0 + 1,
+    (W + 2 * padding.1 - dilation.1 * (kernel_size.1 - 1) - 1) // strides.1 + 1
+] {
     temp index[1:N] n;
     temp index[1:C] c;
-    temp index[1:KH] kh;
-    temp index[1:KW] kw;
-    temp index[1:(H + 2 * padding.0 - dilation.0 * (KH - 1) - 1) // strides.0 + 1] oh;
-    temp index[1:(W + 2 * padding.1 - dilation.1 * (KW - 1) - 1) // strides.1 + 1] ow;
+    temp index[1:kernel_size.0] kh;
+    temp index[1:kernel_size.1] kw;
+    temp index[1:(H + 2 * padding.0 - dilation.0 * (kernel_size.0 - 1) - 1) // strides.0 + 1] oh;
+    temp index[1:(W + 2 * padding.1 - dilation.1 * (kernel_size.1 - 1) - 1) // strides.1 + 1] ow;
     temp float32[N, C, H + 2 * padding.0, W + 2 * padding.1] X_padded = _pad(padding, X);
 
     return sum[kh, kw](X_padded[n, c, strides.0 * oh + kh, strides.1 * ow + kw])[n, c, oh, ow] / (KH * KW);
@@ -110,9 +118,13 @@ op conv(
     param tuple[int64, int64] dilation,
     param int64 groups,
     input float32[N, IC, H, W] X,
-    param float32[OC, IC // groups, KH, KW] W,
-    param float32[OC] B
-) -> output float32[N, OC, (H + 2 * padding.0 - dilation.0 * (KH - 1) - 1) // strides.0 + 1, (W + 2 * padding.1 - dilation.1 * (KW - 1) - 1) // strides.1 + 1] {
+    param float32[OC, IC // groups, KH, KW] W
+) -> output float32[
+    N,
+    OC,
+    (H + 2 * padding.0 - dilation.0 * (KH - 1) - 1) // strides.0 + 1,
+    (W + 2 * padding.1 - dilation.1 * (KW - 1) - 1) // strides.1 + 1
+] {
     temp index[1:N] n;
     temp index[1:IC] ic;
     temp index[1:OC] oc;
@@ -122,7 +134,7 @@ op conv(
     temp index[1:(W + 2 * padding.1 - dilation.1 * (KW - 1) - 1) // strides.1 + 1] ow;
     temp float32[N, C, H + 2 * padding.0, W + 2 * padding.1] X_padded = _pad(padding, X);
 
-    return sum[ic, kh, kw](X_padded[n, ic, strides.0 * oh + kh, strides.1 * ow + kw] * W[oc, ic, kh, kw])[n, oc, oh, ow] + B[oc];
+    return sum[ic, kh, kw](X_padded[n, ic, strides.0 * oh + kh, strides.1 * ow + kw] * W[oc, ic, kh, kw]);
 }
 
 op fc(
@@ -155,14 +167,20 @@ op maxpool(
     param tuple[int64, int64] strides,
     param tuple[int64, int64] padding,
     param tuple[int64, int64] dilation,
+    param tuple[int64, int64] kernel_size,
     input float32[N, C, H, W] X
-) -> output float32[N, C, (H + 2 * padding.0 - dilation.0 * (KH - 1) - 1) // strides.0 + 1, (W + 2 * padding.1 - dilation.1 * (KW - 1) - 1) // strides.1 + 1] {
+) -> output float32[
+    N,
+    C,
+    (H + 2 * padding.0 - dilation.0 * (kernel_size.0 - 1) - 1) // strides.0 + 1,
+    (W + 2 * padding.1 - dilation.1 * (kernel_size.1 - 1) - 1) // strides.1 + 1
+] {
     temp index[1:N] n;
     temp index[1:C] c;
-    temp index[1:KH] kh;
-    temp index[1:KW] kw;
-    temp index[1:(H + 2 * padding.0 - dilation.0 * (KH - 1) - 1) // strides.0 + 1] oh;
-    temp index[1:(W + 2 * padding.1 - dilation.1 * (KW - 1) - 1) // strides.1 + 1] ow;
+    temp index[1:kernel_size.0] kh;
+    temp index[1:kernel_size.1] kw;
+    temp index[1:(H + 2 * padding.0 - dilation.0 * (kernel_size.0 - 1) - 1) // strides.0 + 1] oh;
+    temp index[1:(W + 2 * padding.1 - dilation.1 * (kernel_size.1 - 1) - 1) // strides.1 + 1] ow;
     temp float32[N, C, H + 2 * padding.0, W + 2 * padding.1] X_padded = _pad(padding, X);
 
     return max[kh, kw](X_padded[n, c, strides.0 * oh + kh, strides.1 * ow + kw]);
