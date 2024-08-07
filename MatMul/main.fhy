@@ -1,0 +1,42 @@
+# TODO: Move into separate files when multi-file compilation is fixed
+
+# ----------------------------------------
+# file: blas.fhy
+# ----------------------------------------
+# transA = 'N', transB = 'N'
+op SGEMM_1<T>(
+    input T alpha,
+    input T[M, K] A,
+    input T[K, N] B,
+    input T beta,
+    input T[M, N] C
+) -> output T[M, N] {
+    temp T[M, N] out;
+
+    temp index[1:M] m;
+    temp index[1:N] n;
+    temp index[1:K] k;
+
+    out[m, n] = alpha * sum[k](A[m, k] * B[k, n])[m, n] + beta * C[m, n];
+
+    return out;
+}
+
+# TODO: add SGEMM for other cases of transA and transB
+
+# ----------------------------------------
+# file: main.fhy
+# ----------------------------------------
+proc main(
+    input int32[1000, 500] A,
+    input int32[500, 2000] B,
+    output int32[1000, 2000] C
+) {
+    temp int32[1000, 2000] unused_bias;
+
+    temp index[1:1000] i;
+    temp index[1:2000] j;
+
+    unused_bias[i, j] = 0;
+    C = SGEMM_1<int32>(1, A, B, 0, unused_bias);
+}
