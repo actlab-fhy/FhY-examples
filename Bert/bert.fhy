@@ -1,26 +1,37 @@
 
+op _exp(input float32 x) -> output float32 {
+    param float32 e = 2.71828;
+    temp float32 y = e ** x;
+    return y;
+}
+
 op _sqrt(input float32 x) -> output float32 {
     param float32 n = 0.5;
     temp float32 y = x ** n;
     return y;
 }
 
+op _tanh(input float32 x) -> output float32 {
+    # TODO: Add approximation here
+    return x;
+}
+
 op _expectation(
 	input float32[N, C, H, W] X
-) -> output float32[N] { 
-	temp float32[N] E; 
-	temp index[1:N] n; 
-	temp index[1:C] c; 
-	temp index[1:H] h; 
-	temp index[1:W] w; 
-	
-	E[n] = sum[c, h, w](X[n, c, h, w]) / 1000; 
+) -> output float32[N] {
+	temp float32[N] E;
+	temp index[1:N] n;
+	temp index[1:C] c;
+	temp index[1:H] h;
+	temp index[1:W] w;
+
+	E[n] = sum[c, h, w](X[n, c, h, w]) / 1000;
 	return E;
 }
 
 op _variance(input float32[N, C, H, W] X) -> output float32[N] {
 	temp float32[N] V;
-	temp float32[N] E = _expectation(x)
+	temp float32[N] E = _expectation(X);
 
 	temp index[1:N] n;
 	temp index[1:C] c;
@@ -32,19 +43,19 @@ op _variance(input float32[N, C, H, W] X) -> output float32[N] {
 }
 
 # Layer Normalization
-op LayerNormalization<T>( 
-	input T[N, M] X, 
-	param T[M] scale, # Scale parameter 
-	param T[M] bias, # Bias parameter 
-	param float32 eps 
-) -> output T[N, M] { 
-	temp T[N, M] Y; 
-	temp T[N] E = _expectation(X); 
-	temp T[N] V = _variance(X); 
-	temp index[1:N] n; 
-	temp index[1:M] m; 
+op LayerNormalization<T>(
+	input T[N, M] X,
+	param T[M] scale, # Scale parameter
+	param T[M] bias, # Bias parameter
+	param float32 eps
+) -> output T[N, M] {
+	temp T[N, M] Y;
+	temp T[N] E = _expectation(X);
+	temp T[N] V = _variance(X);
+	temp index[1:N] n;
+	temp index[1:M] m;
 	Y[n, m] = scale[m] * (X[n, m] - E[n]) / _sqrt(V[n] + eps) + bias[m];
-	return Y; 
+	return Y;
 }
 
 # Matrix Mult
@@ -62,17 +73,17 @@ op matmul<T>(
 
 
 
-op Reshape<T>(
-	input T[N, M] X,
-	param tuple[int64, ...] new_shape
-) -> output T[new_shpae] {
-	temp T[new_shape] Y;
-	#TODO: Implemet this logic not sure how to handle multi dim indexing
-	
-	return Y;
-}
+# op Reshape<T>(
+# 	input T[N, M] X,
+# 	param tuple[int64, ...] new_shape
+# ) -> output T[new_shpae] {
+# 	temp T[new_shape] Y;
+# 	#TODO: Implemet this logic not sure how to handle multi dim indexing
 
-#transpose 
+# 	return Y;
+# }
+
+#transpose
 op Transpose<T>(
 	input T[N, M] X
 ) -> output T[M, N] {
@@ -80,7 +91,7 @@ op Transpose<T>(
 	temp index[1:N] n;
 	temp index[1:M] m;
 	Y[m, n] = X[n, m];
-	
+
 	return Y;
 }
 
@@ -89,76 +100,76 @@ op Div<T>(
 	input float32 B
 ) -> output T[N, M] {
 	temp T[N, M] Y;
-	
+
 	temp index[1:N] n;
 	temp index[1:M] m;
-	Y[n, m] = A[n, m]/B
-	
+	Y[n, m] = A[n, m]/B;
+
 	return Y;
 }
 
-# Element wise Multiplication 
+# Element wise Multiplication
 op Mult<T>(
-	input T[N, M] A
+	input T[N, M] A,
 	input float32 B
 ) -> output float32 {
 	temp T[N, M] Y;
-	
+
 	temp index[1: N] n;
 	temp index[1: M] m;
-	
+
 	Y[n, m] = A[n, m] * B[n, m];
-	
+
 	return Y;
 }
 
 op Add<T>(
-	input T[N, M] A
+	input T[N, M] A,
 	input float32 B
 ) -> output float32 {
 	temp T[N, M] Y;
-	
+
 	temp index[1: N] n;
 	temp index[1: M] m;
-	
+
 	Y[n, m] = A[n, m] + B[n, m];
-	
+
 	return Y;
 }
 
-op Softmax<T>( 
-	input T[N, M] X 
-) -> output T[N, M] { 
-	temp T[N, M] Y; 
-	temp index[1:N] n; 
+op Softmax<T>(
+	input T[N, M] X
+) -> output T[N, M] {
+	temp T[N, M] Y;
+	temp index[1:N] n;
 	temp index[1:M] m; Y[n, m] = (_exp(X[n, m])) / sum[m](_exp(X[n, m]));
-	return Y; 
+	return Y;
 }
 
 
 
-op GELU<T>(input T[N, M] X) -> ouput T[N, M] {
+op GELU<T>(input T[N, M] X) -> output T[N, M] {
 	temp T[N, M] Y;
 	temp index[1:N] n;
 	temp index[1:M] m;
 
 	# GELU approximation: 0.5 * x * (1 + tanh(sqrt(2/π) * (x + 0.044715 * x^3))) from pytorch
 
-	Y[n, m] = 0.5* X[n, m] * (1.0 + tanh(0.797884 * (X[n, m] + 0.044715 * X[n, m]**3)))
-	return Y
-	
+	Y[n, m] = 0.5* X[n, m] * (1.0 + _tanh(0.797884 * (X[n, m] + 0.044715 * X[n, m]**3)));
+	return Y;
+
 }
 
 # 1/1-p
 op Dropout<T>(
-	input T[N, M] X, 
+	input T[N, M] X,
 	param float32 dropout_prob
 ) -> output T[N, M] {
-	temp T[N, M] y;
+	temp T[N, M] Y;
 	temp index[1:N] n;
 	temp index[1:M] m;
 
-	# place holder need a implementation 
+	# place holder need a implementation
 	# to generate random values
 	temp float32[N, M] mask;
 
@@ -168,11 +179,11 @@ op Dropout<T>(
 }
 
 # B = Batch size
-# S = Sequence length 
+# S = Sequence length
 # H = Hidden size
 # simplified verision
 op EmbeddingLookup<T>(
-	input int32[B, S] input ids,
+	input int32[B, S] input_ids,
 	param T[V, H] embedding_table
 ) -> output T[B, S, H] {
 	temp T[B, S, H] embeddings;
@@ -180,36 +191,35 @@ op EmbeddingLookup<T>(
 	temp index[1:S] s;
 	temp index[1:H] h;
 
-	embeddings[b, s, h] = embedding_table[input_ids[b,s], h]
+	embeddings[b, s, h] = embedding_table[input_ids[b,s], h];
 }
 
 # might not be fully correct
 op PositionEmbedding<T>(
-	input T[B, S, H] input_embeddings;
-	param T[S, H] position_embeddings;
-	
+	input T[B, S, H] input_embeddings,
+	param T[S, H] position_embeddings
 ) -> output T[B, S, H] {
-	temp T[B, S, H] output_embeddings
+	temp T[B, S, H] output_embeddings;
 	temp index[1:B] b;
 	temp index[1:S] s;
 	temp index[1:H] h;
 
-	output_embeddings[b, s, h] = input_embeddings[b, s, h] + positon_embeddings[s,h];
+	output_embeddings[b, s, h] = input_embeddings[b, s, h] + position_embeddings[s,h];
 
 	return output_embeddings;
 }
 
 # Attention mask creation only work for bert
-op CreateAttentionMask( 
-	input int32[B, S] input_mask 
-) -> output float32[B, 1, 1, S] { 
-	# instead of broadcasting directly assing values 
-	temp float32[B, 1, 1, S] attention_mask; 
-	temp index[1:B] b; 
-	temp index[1:S] s; 
-	attention_mask[b, 0, 0, s] = input_mask[b, s]; 
-	
-	return attention_mask; 
+op CreateAttentionMask(
+	input int32[B, S] input_mask
+) -> output float32[B, 1, 1, S] {
+	# instead of broadcasting directly assing values
+	temp float32[B, 1, 1, S] attention_mask;
+	temp index[1:B] b;
+	temp index[1:S] s;
+	attention_mask[b, 0, 0, s] = input_mask[b, s];
+
+	return attention_mask;
 }
 
 op PoolingLayer<T>(
@@ -218,8 +228,8 @@ op PoolingLayer<T>(
 	temp T[B, H] pooled_output;
 	temp index[1:B] b;
 	temp index[1:H] h;
-	
-	pooled_output[b, h] = sequence_ouputp[b, 0, h];
+
+	pooled_output[b, h] = sequence_output[b, 0, h];
 
 	return pooled_output;
 }
@@ -227,17 +237,17 @@ op PoolingLayer<T>(
 # FeedForward procedure
 proc FeedForward<T>(
     input T[B, S, H] input_tensor,
-    param T[H, 4H] intermediate_weight,
-    param T[4H, H] output_weight,
-    param T[4H] intermediate_bias,
+    param T[H, 4 * H] intermediate_weight,
+    param T[4 * H, H] output_weight,
+    param T[4 * H] intermediate_bias,
     param T[H] output_bias,
     output T[B, S, H] output_tensor
 ) {
-    temp T[B, S, 4H] intermediate_output;
+    temp T[B, S, 4 * H] intermediate_output;
     temp T[B, S, H] layer_output;
     temp index[1:B] b;
     temp index[1:S] s;
-    temp index[1:4H] h4;
+    temp index[1:4 * H] h4;
     temp index[1:H] h;
 
     # linear transformation
@@ -255,17 +265,22 @@ proc FeedForward<T>(
 
 proc SelfAttention<T>(
     input T[B, S, H] input_tensor,
-    param T[H, H] query_weight, key_weight, value_weight,
+    param T[H, H] query_weight,
+    param T[H, H] key_weight,
+    param T[H, H] value_weight,
     param T[H] attention_output_bias,
     param float32 layer_norm_eps,
     input float32[B, 1, 1, S] attention_mask,
     param float32 attention_probs_dropout_prob,
     output T[B, S, H] attention_output
 ) {
-    temp T[B, S, H] query_layer, key_layer, value_layer;
+    temp T[B, S, H] query_layer;
+    temp T[B, S, H] key_layer;
+    temp T[B, S, H] value_layer;
     temp T[B, S, S] attention_scores;
     temp T[B, S, S] attention_probs;
-    temp float32 attention_head_size = float32(H);
+    # temp float32 attention_head_size = float32(H);
+    temp float32 attention_head_size = H;
 
     # Linear transformations for Q, K, V
     query_layer = matmul(input_tensor, query_weight);
@@ -294,14 +309,18 @@ proc SelfAttention<T>(
 
 proc BERTLayer<T>(
     input T[B, S, H] input_tensor,
-    param T[H, H] query_weight, key_weight, value_weight,
+    param T[H, H] query_weight,
+    param T[H, H] key_weight,
+    param T[H, H] value_weight,
     param T[H] attention_output_bias,
-    param T[H, 4H] intermediate_weight,
-    param T[4H, H] output_weight,
-    param T[4H] intermediate_bias,
+    param T[H, 4 * H] intermediate_weight,
+    param T[4 * H, H] output_weight,
+    param T[4 * H] intermediate_bias,
     param T[H] output_bias,
-    param T[H] attention_layer_norm_scale, attention_layer_norm_bias,
-    param T[H] output_layer_norm_scale, output_layer_norm_bias,
+    param T[H] attention_layer_norm_scale,
+    param T[H] attention_layer_norm_bias,
+    param T[H] output_layer_norm_scale,
+    param T[H] output_layer_norm_bias,
     param float32 layer_norm_eps,
     input float32[B, 1, 1, S] attention_mask,
     param float32 hidden_dropout_prob,
@@ -338,9 +357,9 @@ proc main(
     param float32[L, H, H] key_weight,
     param float32[L, H, H] value_weight,
     param float32[L, H] attention_output_bias,
-    param float32[L, H, 4H] intermediate_weight,
-    param float32[L, 4H, H] output_weight,
-    param float32[L, 4H] intermediate_bias,
+    param float32[L, H, 4 * H] intermediate_weight,
+    param float32[L, 4 * H, H] output_weight,
+    param float32[L, 4 * H] intermediate_bias,
     param float32[L, H] output_bias,
     param float32[L, H] attention_layer_norm_scale,
     param float32[L, H] attention_layer_norm_bias,
@@ -356,22 +375,22 @@ proc main(
     # Embedding layer
     temp float32[B, S, H] embedding_output = EmbeddingLookup(input_ids, word_embeddings);
     embedding_output = PositionEmbedding(embedding_output, position_embeddings);
-    
+
     # Add token type embeddings
     temp float32[B, S, H] token_type_embeddings_output = EmbeddingLookup(token_type_ids, token_type_embeddings);
     embedding_output = Add(embedding_output, token_type_embeddings_output);
-    
+
     # Layer normalization and dropout for embeddings
     embedding_output = LayerNormalization(embedding_output, embedding_layer_norm_scale, embedding_layer_norm_bias, layer_norm_eps);
     embedding_output = Dropout(embedding_output, hidden_dropout_prob);
-    
+
     # Create attention mask
     temp float32[B, 1, 1, S] attention_mask = CreateAttentionMask(input_mask);
-    
+
     # Transformer layers
     temp float32[B, S, H] layer_output = embedding_output;
     temp index[1:L] l;
-    
+
     # First layer uses embedding_output as input
     layer_output = BERTLayer(
         embedding_output,
@@ -405,7 +424,7 @@ proc main(
         hidden_dropout_prob,
         attention_probs_dropout_prob
     );
-    
+
     sequence_output = layer_output;
     pooled_output = PoolingLayer(sequence_output);
 }
