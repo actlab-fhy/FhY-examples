@@ -42,7 +42,7 @@ op _variance(input float32[N, C, H, W] X) -> output float32[N] {
 	temp index[1:W] w;
 
 	V[n] = sum[c, h, w]((X[n, c, h, w] - E[n]) **2)/1000;
-
+    return V;
 }
 
 # Layer Normalization
@@ -53,10 +53,12 @@ op LayerNormalization<T>(
 	param float32 eps
 ) -> output T[N, M] {
 	temp T[N, M] Y;
+
 	temp T[N] E = _expectation(X);
 	temp T[N] V = _variance(X);
 	temp index[1:N] n;
 	temp index[1:M] m;
+
 	Y[n, m] = scale[m] * (X[n, m] - E[n]) / _sqrt(V[n] + eps) + bias[m];
 	return Y;
 }
@@ -74,8 +76,6 @@ op matmul<T>(
     return C;
 }
 
-
-
 # op Reshape<T>(
 # 	input T[N, M] X,
 # 	param tuple[int64, ...] new_shape
@@ -86,7 +86,6 @@ op matmul<T>(
 # 	return Y;
 # }
 
-#transpose
 op Transpose<T>(
 	input T[N, M] X
 ) -> output T[M, N] {
@@ -111,7 +110,6 @@ op Div<T>(
 	return Y;
 }
 
-# Element wise Multiplication
 op Mult<T>(
 	input T[N, M] A,
 	input float32 B
@@ -128,14 +126,14 @@ op Mult<T>(
 
 op Add<T>(
 	input T[N, M] A,
-	input float32 B
-) -> output float32 {
+	input T B
+) -> output T[N, M] {
 	temp T[N, M] Y;
 
 	temp index[1: N] n;
 	temp index[1: M] m;
 
-	Y[n, m] = A[n, m] + B[n, m];
+	Y[n, m] = A[n, m] + B;
 
 	return Y;
 }
@@ -163,7 +161,6 @@ op GELU<T>(input T[N, M] X) -> output T[N, M] {
 
 }
 
-# 1/1-p
 op Dropout<T>(
 	input T[N, M] X,
 	param float32 dropout_prob
@@ -171,20 +168,14 @@ op Dropout<T>(
 	temp T[N, M] Y;
 	temp index[1:N] n;
 	temp index[1:M] m;
-
-	# place holder need a implementation
-	# to generate random values
-	temp float32[N, M] mask;
-
-	Y[n, m] = X[n, m] * mask[n,m] / (1.0 - dropout_prob);
-
+    Y[n, m] = X[n, m] * (1.0 - dropout_prob);
 	return Y;
 }
 
 # B = Batch size
 # S = Sequence length
 # H = Hidden size
-# simplified verision
+# simplified version
 op EmbeddingLookup<T>(
 	input int32[B, S] input_ids,
 	param T[V, H] embedding_table
@@ -194,7 +185,9 @@ op EmbeddingLookup<T>(
 	temp index[1:S] s;
 	temp index[1:H] h;
 
-	embeddings[b, s, h] = embedding_table[input_ids[b,s], h];
+	# embeddings[b, s, h] = embedding_table[input_ids[b, s], h];
+    embeddings[b, s, h] = embedding_table[b, h];
+    return embeddings;
 }
 
 # might not be fully correct
@@ -283,7 +276,8 @@ proc SelfAttention<T>(
     temp T[B, S, S] attention_scores;
     temp T[B, S, S] attention_probs;
     # temp float32 attention_head_size = float32(H);
-    temp float32 attention_head_size = H;
+    # temp float32 attention_head_size = H;
+    temp float32 attention_head_size = 1000;
 
     # Linear transformations for Q, K, V
     query_layer = matmul(input_tensor, query_weight);
@@ -303,11 +297,8 @@ proc SelfAttention<T>(
     # attention dropout
     attention_probs = Dropout(attention_probs, attention_probs_dropout_prob);
 
-    # weighted sum of values
-    attention_output = matmul(attention_probs, value_layer);
-
     # output bias
-    attention_output = Add(attention_output, attention_output_bias);
+    attention_output = Add(matmul(attention_probs, value_layer), attention_output_bias);
 }
 
 proc BERTLayer<T>(
