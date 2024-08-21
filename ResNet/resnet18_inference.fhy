@@ -136,11 +136,11 @@ op avgpool(
     temp index[1:C] c;
     temp index[1:KERNEL_SIZE.0] kh;
     temp index[1:KERNEL_SIZE.1] kw;
-    temp index[1:(H + 2 * PADDING.0 - DILATION.0 * (KERNEL_SIZE.0 - 1) - 1) // STRIDES.0 + 1] oh;
-    temp index[1:(W + 2 * PADDING.1 - DILATION.1 * (KERNEL_SIZE.1 - 1) - 1) // STRIDES.1 + 1] ow;
+    temp index[1:(H + 2 * PADDING.0 - DILATION.0 * (KERNEL_SIZE.0 - 1) - 1) // STRIDES.0 + 1:STRIDES.0] oh;
+    temp index[1:(W + 2 * PADDING.1 - DILATION.1 * (KERNEL_SIZE.1 - 1) - 1) // STRIDES.1 + 1:STRIDES.1] ow;
 
     temp float32[N, C, H + 2 * PADDING.0, W + 2 * PADDING.1] X_padded = _pad(X, PADDING);
-    Y[n, c, oh, ow] = sum[kh, kw](X_padded[n, c, STRIDES.0 * oh + kh, STRIDES.1 * ow + kw]);
+    Y[n, c, oh, ow] = sum[kh, kw](X_padded[n, c, oh + kh, ow + kw]);
     Y[n, c, oh, ow] = Y[n, c, oh, ow] / (KERNEL_SIZE.0 * KERNEL_SIZE.1);
 
     return Y;
@@ -193,11 +193,11 @@ op conv(
     temp index[1:OC] oc;
     temp index[1:KH] kh;
     temp index[1:KW] kw;
-    temp index[1:(H + 2 * PADDING.0 - DILATION.0 * (KH - 1) - 1) // STRIDES.0 + 1] oh;
-    temp index[1:(W + 2 * PADDING.1 - DILATION.1 * (KW - 1) - 1) // STRIDES.1 + 1] ow;
+    temp index[1:(H + 2 * PADDING.0 - DILATION.0 * (KH - 1) - 1) // STRIDES.0 + 1:STRIDES.0] oh;
+    temp index[1:(W + 2 * PADDING.1 - DILATION.1 * (KW - 1) - 1) // STRIDES.1 + 1:STRIDES.1] ow;
 
     temp float32[N, IC, H + 2 * PADDING.0, W + 2 * PADDING.1] X_padded = _pad(PADDING, X);
-    Y[n, oc, oh, ow] = sum[ic, kh, kw](X_padded[n, ic, STRIDES.0 * oh + kh, STRIDES.1 * ow + kw] * W[oc, ic, kh, kw]);
+    Y[n, oc, oh, ow] = sum[ic, kh, kw](X_padded[n, ic, oh + kh, ow + kw] * W[oc, ic, kh, kw]);
 
     return Y;
 }
@@ -258,11 +258,11 @@ op maxpool(
     temp index[1:C] c;
     temp index[1:KERNEL_SIZE.0] kh;
     temp index[1:KERNEL_SIZE.1] kw;
-    temp index[1:(H + 2 * PADDING.0 - DILATION.0 * (KERNEL_SIZE.0 - 1) - 1) // STRIDES.0 + 1] oh;
-    temp index[1:(W + 2 * PADDING.1 - DILATION.1 * (KERNEL_SIZE.1 - 1) - 1) // STRIDES.1 + 1] ow;
+    temp index[1:(H + 2 * PADDING.0 - DILATION.0 * (KERNEL_SIZE.0 - 1) - 1) // STRIDES.0 + 1:STRIDES.0] oh;
+    temp index[1:(W + 2 * PADDING.1 - DILATION.1 * (KERNEL_SIZE.1 - 1) - 1) // STRIDES.1 + 1:STRIDES.1] ow;
 
     temp float32[N, C, H + 2 * PADDING.0, W + 2 * PADDING.1] X_padded = _pad(PADDING, X);
-    Y[n, c, oh, ow] = max[kh, kw](X_padded[n, c, STRIDES.0 * oh + kh, STRIDES.1 * ow + kw]);
+    Y[n, c, oh, ow] = max[kh, kw](X_padded[n, c, oh + kh, ow + kw]);
 
     return Y;
 }
