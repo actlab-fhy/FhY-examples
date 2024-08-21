@@ -53,8 +53,7 @@ op _expectation(input float32[N, C, H, W] X) -> output float32[N] {
     temp index[1:H] h;
     temp index[1:W] w;
 
-    # E[n] = sum[c, h, w](X[n, c, h, w]) / (C * H * W);
-    E[n] = sum[c, h, w](X[n, c, h, w]) / 1000;
+    E[n] = sum[c, h, w](X[n, c, h, w]) / (C * H * W);
 
     return E;
 }
@@ -68,8 +67,7 @@ op _variance(input float32[N, C, H, W] X) -> output float32[N] {
     temp index[1:W] w;
 
     temp float32[N] E = _expectation(X);
-    # V[n] = sum[c, h, w]((X[n, c, h, w] - E[n]) ** 2)[n] / (C * H * W - 1);
-    V[n] = sum[c, h, w]((X[n, c, h, w] - E[n]) ** 2)[n] / 1000;
+    V[n] = sum[c, h, w]((X[n, c, h, w] - E[n]) ** 2)[n] / (C * H * W - 1);
 
     return V;
 }
@@ -365,10 +363,8 @@ proc basic_block_stride_neq_1(
     param int64 STRIDE,
     output float32[N, C, (H - 1) // STRIDE + 1, (W - 1) // STRIDE + 1] Y
 ) {
-    # param int64 CONV1_OH = (H - 1) // STRIDE + 1;
-    # param int64 CONV1_OW = (W - 1) // STRIDE + 1;
-    param int64 CONV1_OH = (1000 - 1) // STRIDE + 1;
-    param int64 CONV1_OW = (1000 - 1) // STRIDE + 1;
+    param int64 CONV1_OH = (H - 1) // STRIDE + 1;
+    param int64 CONV1_OW = (W - 1) // STRIDE + 1;
     param int64 CONV2_OH = CONV1_OH;
     param int64 CONV2_OW = CONV1_OW;
 
