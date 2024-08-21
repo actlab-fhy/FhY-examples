@@ -1,0 +1,13 @@
+proc main(input int32 scalar1, input int32 scalar2, input int32[N] array_in, output int32[N] array_out) {
+    # Declare an index variable to iterate over the input and output arrays
+    temp index[1:N] i;
+
+    # Add scalar1 to the product of the size of the input array and scalar2
+    temp int32 scalar3 = scalar1 + N * scalar2;
+
+    # OR the upper 16 bits of scalar2 in to scalar1
+    temp int32 scalar4 = scalar1 | scalar2 & 0xffff0000;
+
+    # Iterate over the input array, adding scalar3 and scalar4 to each element
+    array_out[i] = array_in[i] + scalar3 + scalar4;
+}
