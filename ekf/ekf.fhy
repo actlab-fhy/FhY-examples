@@ -1,0 +1,295 @@
+# Constants
+param int NUM_LANDMARKS = 6;
+param float SIG_X2 = 0.25;
+param float SIG_Y2 = 0.1;
+param float SIG_ALPHA2 = 0.1;
+param float SIG_BETA2 = 0.01;
+param float SIG_R2 = 0.08;
+
+# State/global variables
+temp float[3 + 2 * NUM_LANDMARKS] mu;
+temp float[3 + 2 * NUM_LANDMARKS, 3 + 2 * NUM_LANDMARKS] Sigma;
+
+# -------------------------
+# Initialization
+#--------------------------
+proc initialize_ekf_slam() {
+    temp index[1:3 + 2 * NUM_LANDMARKS] i;
+    
+    mu[i] = 0.0;
+    
+    Sigma[1:3, 1:3] = 0.001;
+    Sigma[4:, 4:] = 1000.0;
+}
+
+# -------------------------
+# ATAN2 **Not Done **
+#--------------------------
+op atan2(input dx , input dy){
+
+    return 
+}
+
+# -------------------------
+# Motion Update 
+#--------------------------
+proc motion_update(
+    input float dx, 
+    input float dy, 
+    input float dtheta) {
+    # Update mu
+    mu[1] = mu[1] + dx;
+    mu[2] = mu[2] + dy;
+    mu[3] = mu[3] + dtheta;
+
+    # Create matrix G
+    temp float[3 + 2 * NUM_LANDMARKS, 3 + 2 * NUM_LANDMARKS] G;
+    G = create_matrix(3 + 2 * NUM_LANDMARKS, 3 + 2 * NUM_LANDMARKS, 1.0);
+
+    #motion noise covariance R
+    temp float[3, 3] R;
+    R = create_matrix(3, 3, 0.0);
+    R[1, 1] = SIG_X2;
+    R[2, 2] = SIG_Y2;
+    R[3, 3] = SIG_ALPHA2;
+
+    temp float[3 + 2 * NUM_LANDMARKS, 3 + 2 * NUM_LANDMARKS] temp_Sigma;
+    temp_Sigma = matrix_mult(matrix_mult(G, Sigma), matrix_transpose(G));
+    
+    # Add R to the top-left 3x3 submatrix of Sigma
+    temp index[1:3] i;
+    temp index[1:3] j;
+    Sigma[i, j] = temp_Sigma[i, j] + R[i, j];
+    
+    # Copy the rest of temp_Sigma to Sigma (bottom)
+    temp index[4:3 + 2 * NUM_LANDMARKS] k;
+    temp index[1:3 + 2 * NUM_LANDMARKS] l;
+    Sigma[k, l] = temp_Sigma[k, l];
+}
+
+
+# -------------------------
+# Create Matrix 
+#--------------------------
+op create_matrix(
+    input int rows, 
+    input int cols, 
+    input float init_val = 0.0
+) -> output float[rows, cols] {
+    temp float[rows, cols] matrix;
+    temp index[1:rows] i;
+    temp index[1:cols] j;
+    
+    matrix[i, j] = init_val;
+    
+    return matrix;
+}
+
+# -------------------------
+# Transpose Matrix
+#--------------------------
+op transpose(
+    input float[rows, cols] mat
+) -> output float[cols, rows] {
+    temp float[cols, rows] trans;
+    temp index[1:rows] i;
+    temp index[1:cols] j;
+    
+    trans[j, i] = mat[i, j];
+    
+    return trans;
+}
+
+# -------------------------
+# Matrix Multiplication 
+#--------------------------
+op matrix_mult(
+    input float[m, n] mat1, 
+    input float[n, p] mat2
+) -> output float[m, p] {
+    temp float[m, p] result;
+    temp index[1:m] i;
+    temp index[1:p] j;
+    temp index[1:n] k;
+    
+    result[i, j] = sum[k](mat1[i, k] * mat2[k, j]);
+    
+    return result;
+}
+
+# -----------------------------
+# Matrix Vector Multiplication
+#------------------------------
+op matrix_vector_mult(
+    input float[m, n] mat, 
+    input float[n] vec
+) -> output float[m] {
+    temp float[m] result;
+    temp index[1:m] i;
+    temp index[1:n] j;
+    
+    result[i] = sum[j](mat[i, j] * vec[j]);
+    
+    return result;
+}
+
+# -------------------------
+# Matrix Addition
+#--------------------------
+op matrix_add(
+    input float[rows, cols] A, 
+    input float[rows, cols] B
+) -> output float[rows, cols] {
+    temp float[rows, cols] result;
+    temp index[1:rows] i;
+    temp index[1:cols] j;
+    
+    result[i, j] = A[i, j] + B[i, j];
+    
+    return result;
+}
+
+# -------------------------
+# Matrix Substraction
+#--------------------------
+op matrix_sub(
+    input float[rows, cols] A, 
+    input float[rows, cols] B
+) -> output float[rows, cols] {
+    temp float[rows, cols] result;
+    temp index[1:rows] i;
+    temp index[1:cols] j;
+    
+    result[i, j] = A[i, j] - B[i, j];
+    
+    return result;
+}
+
+# -------------------------
+# Get Status 
+#--------------------------
+op get_status() -> output float[3 + 2 * NUM_LANDMARKS] {
+    return mu;
+}
+
+# -------------------------
+# SQRT 
+#--------------------------
+op sqrt(
+    input float32 x
+) -> output float32 {
+    param float32 n = 0.5;
+
+    temp float32 y = x ** n;
+
+    return y;
+}
+
+# -------------------------
+# Measurement Update
+#--------------------------
+proc measurement_update(input float[2 * NUM_LANDMARKS] measurements) {
+    temp index[1:NUM_LANDMARKS] i;  # ****Don't know how to for looop with condition ****
+    
+    temp float[2, 2] Q;
+    Q = create_matrix(2, 2, 0.0);
+    Q[1, 1] = SIG_R2;
+    Q[2, 2] = SIG_BETA2;
+
+    temp int landmark_index = 3 + 2 * i;
+
+    temp float dx = measurements[2 * i] - mu[landmark_index];
+    temp float dy = measurements[2 * i + 1] - mu[landmark_index + 1];
+    temp float q = dx * dx + dy * dy;
+
+    temp float[2, 3 + 2 * NUM_LANDMARKS] H;
+    H = create_matrix(2, 3 + 2 * NUM_LANDMARKS, 0.0);
+    
+    temp float q_sqrt = sqrt(q);
+    H[1, 1] = -dx / q_sqrt;
+    H[1, 2] = -dy / q_sqrt;
+    H[1, landmark_index] = dx / q_sqrt;
+    H[1, landmark_index + 1] = dy / q_sqrt;
+    H[2, 1] = dy / q;
+    H[2, 2] = -dx / q;
+    H[2, landmark_index] = -dy / q;
+    H[2, landmark_index + 1] = dx / q;
+
+    temp float[2, 2] S;
+    S = matrix_add(matrix_mult(matrix_mult(H, Sigma), transpose(H)), Q);
+    
+    temp float[3 + 2 * NUM_LANDMARKS, 2] K;
+    K = matrix_mult(matrix_mult(Sigma, transpose(H)), matrix_inverse(S));
+
+    temp float[2] z_diff;
+    z_diff[1] = measurements[2 * i - 1];
+    z_diff[2] = measurements[2 * i];
+    
+    temp float[3 + 2 * NUM_LANDMARKS] mu_diff;
+    mu_diff = matrix_vector_mult(K, z_diff);
+    
+    temp index[1:3 + 2 * NUM_LANDMARKS] j;
+    mu[j] = mu[j] + mu_diff[j];
+
+    Sigma = matrix_sub(Sigma, matrix_mult(matrix_mult(K, H), Sigma));
+}
+
+
+# -------------------------
+# Matrix Inverse 
+#--------------------------
+
+# **** This might be not fully accurate ****
+op matrix_inverse(
+    input float[n, n] mat
+) -> output float[n, n] {
+    temp float[n, 2*n] augmented_matrix;
+    temp index[1:n] i;
+    temp index[1:n] j;
+    temp index[1:n] k;
+
+    augmented_matrix[i, j] = mat[i, j];
+    # Not sure how to do condition 
+    augmented_matrix[i, i+n] = 1.0;
+
+    # Gauss-Jordan elimination
+    temp index[1:n] pivot_row;
+    temp float pivot_value;
+    temp float factor;
+    temp index[0:2*n] col;
+
+    # Normalize the pivot row
+    pivot_value = augmented_matrix[pivot_row, pivot_row];
+    augmented_matrix[pivot_row, col] = augmented_matrix[pivot_row, col] / pivot_value;
+
+    # Eliminate other rows
+    factor = augmented_matrix[i, pivot_row];
+    temp float[1, 2*n] scaled_pivot_row = factor * augmented_matrix[pivot_row, col];
+    augmented_matrix[i, col] = augmented_matrix[i, col] - scaled_pivot_row;
+
+    augmented_matrix[pivot_row, col] = augmented_matrix[pivot_row, col];
+
+    # Extract inverse matrix
+    temp float[n, n] inverse_matrix;
+    inverse_matrix[i, j] = augmented_matrix[i, j+n];
+
+    return inverse_matrix;
+}
+
+
+# -------------------------
+# Main Fuction
+#--------------------------
+
+# **** I thought proc don't have return type but
+# but in reset I see you have output with proc *****
+
+proc main() {
+    initialize_ekf_slam();
+    motion_update(1.0, 0.5, 0.1);
+    
+    temp float[2 * NUM_LANDMARKS] example_measurements;
+    measurement_update(example_measurements);
+    
+    temp float[3 + 2 * NUM_LANDMARKS] status = get_status();
+}
