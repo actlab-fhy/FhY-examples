@@ -74,20 +74,21 @@ op _variance(input float32[N, C, H, W] X) -> output float32[N] {
 
 op _pad(
     input float32 [N, C, H, W] X,
-    param tuple[int64, int64] PADDING
-) -> output float32[N, C, H + 2 * PADDING.0, W + 2 * PADDING.1] {
-    temp float32[N, C, H + 2 * PADDING.0, W + 2 * PADDING.1] X_padded;
+    param int64 PADDING_X,
+    param int64 PADDING_Y
+) -> output float32[N, C, H + 2 * PADDING_Y, W + 2 * PADDING_X] {
+    temp float32[N, C, H + 2 * PADDING_Y, W + 2 * PADDING_X] X_padded;
 
     temp index[1:N] n;
     temp index[1:C] c;
     temp index[1:H] h;
     temp index[1:W] w;
-    temp index[1:PADDING.1] padding_x_lower;
-    temp index[W + 1:W + PADDING.1] padding_x_upper;
-    temp index[1:PADDING.0] padding_y_lower;
-    temp index[H + 1:H + PADDING.0] padding_y_upper;
+    temp index[1:PADDING_X] padding_x_lower;
+    temp index[W + 1:W + PADDING_X] padding_x_upper;
+    temp index[1:PADDING_Y] padding_y_lower;
+    temp index[H + 1:H + PADDING_Y] padding_y_upper;
 
-    X_padded[n, c, h + PADDING.0, w + PADDING.1] = X[n, c, h, w];
+    X_padded[n, c, h + PADDING_Y, w + PADDING_X] = X[n, c, h, w];
     X_padded[n, c, padding_y_lower, padding_x_lower] = 0.0;
     X_padded[n, c, padding_y_upper, padding_x_upper] = 0.0;
 
@@ -113,33 +114,37 @@ op add(
 # TODO: implement dilation
 op avgpool(
     input float32[N, C, H, W] X,
-    param tuple[int64, int64] STRIDES,
-    param tuple[int64, int64] PADDING,
-    param tuple[int64, int64] DILATION,
-    param tuple[int64, int64] KERNEL_SIZE
+    param int64 STRIDES_X,
+    param int64 STRIDES_Y,
+    param int64 PADDING_X,
+    param int64 PADDING_Y,
+    param int64 DILATION_X,
+    param int64 DILATION_Y,
+    param int64 KERNEL_SIZE_X,
+    param int64 KERNEL_SIZE_Y
 ) -> output float32[
     N,
     C,
-    (H + 2 * PADDING.0 - DILATION.0 * (KERNEL_SIZE.0 - 1) - 1) // STRIDES.0 + 1,
-    (W + 2 * PADDING.1 - DILATION.1 * (KERNEL_SIZE.1 - 1) - 1) // STRIDES.1 + 1
+    (H + 2 * PADDING_Y - DILATION_Y * (KERNEL_SIZE_Y - 1) - 1) // STRIDES_Y + 1,
+    (W + 2 * PADDING_X - DILATION_X * (KERNEL_SIZE_X - 1) - 1) // STRIDES_X + 1
 ] {
     temp float32[
         N,
         C,
-        (H + 2 * PADDING.0 - DILATION.0 * (KERNEL_SIZE.0 - 1) - 1) // STRIDES.0 + 1,
-        (W + 2 * PADDING.1 - DILATION.1 * (KERNEL_SIZE.1 - 1) - 1) // STRIDES.1 + 1
+        (H + 2 * PADDING_Y - DILATION_Y * (KERNEL_SIZE_Y - 1) - 1) // STRIDES_Y + 1,
+        (W + 2 * PADDING_X - DILATION_X * (KERNEL_SIZE_X - 1) - 1) // STRIDES_X + 1
     ] Y;
 
     temp index[1:N] n;
     temp index[1:C] c;
-    temp index[1:KERNEL_SIZE.0] kh;
-    temp index[1:KERNEL_SIZE.1] kw;
-    temp index[1:(H + 2 * PADDING.0 - DILATION.0 * (KERNEL_SIZE.0 - 1) - 1) // STRIDES.0 + 1:STRIDES.0] oh;
-    temp index[1:(W + 2 * PADDING.1 - DILATION.1 * (KERNEL_SIZE.1 - 1) - 1) // STRIDES.1 + 1:STRIDES.1] ow;
+    temp index[1:KERNEL_SIZE_Y] kh;
+    temp index[1:KERNEL_SIZE_X] kw;
+    temp index[1:(H + 2 * PADDING_Y - DILATION_Y * (KERNEL_SIZE_Y - 1) - 1) // STRIDES_Y + 1:STRIDES_Y] oh;
+    temp index[1:(W + 2 * PADDING_X - DILATION_X * (KERNEL_SIZE_X - 1) - 1) // STRIDES_X + 1:STRIDES_X] ow;
 
-    temp float32[N, C, H + 2 * PADDING.0, W + 2 * PADDING.1] X_padded = _pad(X, PADDING);
+    temp float32[N, C, H + 2 * PADDING_Y, W + 2 * PADDING_X] X_padded = _pad(X, PADDING_X, PADDING_Y);
     Y[n, c, oh, ow] = sum[kh, kw](X_padded[n, c, oh + kh, ow + kw]);
-    Y[n, c, oh, ow] = Y[n, c, oh, ow] / (KERNEL_SIZE.0 * KERNEL_SIZE.1);
+    Y[n, c, oh, ow] = Y[n, c, oh, ow] / (KERNEL_SIZE_Y * KERNEL_SIZE_X);
 
     return Y;
 }
@@ -167,23 +172,26 @@ op batchnorm(
 # TODO: implement groups and dilation
 # TODO: implement padding techniques other than 0's
 op conv(
-    param tuple[int64, int64] STRIDES,
-    param tuple[int64, int64] PADDING,
-    param tuple[int64, int64] DILATION,
+    param int64 STRIDES_X,
+    param int64 STRIDES_Y,
+    param int64 PADDING_X,
+    param int64 PADDING_Y,
+    param int64 DILATION_X,
+    param int64 DILATION_Y,
     param int64 groups,
-    input float32[N, IC, H, W] X,
+    input float32[N, IC, IH, IW] X,
     param float32[OC, IC // groups, KH, KW] W
 ) -> output float32[
     N,
     OC,
-    (H + 2 * PADDING.0 - DILATION.0 * (KH - 1) - 1) // STRIDES.0 + 1,
-    (W + 2 * PADDING.1 - DILATION.1 * (KW - 1) - 1) // STRIDES.1 + 1
+    (IH + 2 * PADDING_Y - DILATION_Y * (KH - 1) - 1) // STRIDES_Y + 1,
+    (IW + 2 * PADDING_X - DILATION_X * (KW - 1) - 1) // STRIDES_X + 1
 ] {
     temp float32[
         N,
         OC,
-        (H + 2 * PADDING.0 - DILATION.0 * (KH - 1) - 1) // STRIDES.0 + 1,
-        (W + 2 * PADDING.1 - DILATION.1 * (KW - 1) - 1) // STRIDES.1 + 1
+        (IH + 2 * PADDING_Y - DILATION_Y * (KH - 1) - 1) // STRIDES_Y + 1,
+        (IW + 2 * PADDING_X - DILATION_X * (KW - 1) - 1) // STRIDES_X + 1
     ] Y;
 
     temp index[1:N] n;
@@ -191,10 +199,10 @@ op conv(
     temp index[1:OC] oc;
     temp index[1:KH] kh;
     temp index[1:KW] kw;
-    temp index[1:(H + 2 * PADDING.0 - DILATION.0 * (KH - 1) - 1) // STRIDES.0 + 1:STRIDES.0] oh;
-    temp index[1:(W + 2 * PADDING.1 - DILATION.1 * (KW - 1) - 1) // STRIDES.1 + 1:STRIDES.1] ow;
+    temp index[1:(IH + 2 * PADDING_Y - DILATION_Y * (KH - 1) - 1) // STRIDES_Y + 1:STRIDES_Y] oh;
+    temp index[1:(IW + 2 * PADDING_X - DILATION_X * (KW - 1) - 1) // STRIDES_X + 1:STRIDES_X] ow;
 
-    temp float32[N, IC, H + 2 * PADDING.0, W + 2 * PADDING.1] X_padded = _pad(PADDING, X);
+    temp float32[N, IC, IH + 2 * PADDING_Y, IW + 2 * PADDING_X] X_padded = _pad(X, PADDING_X, PADDING_Y);
     Y[n, oc, oh, ow] = sum[ic, kh, kw](X_padded[n, ic, oh + kh, ow + kw] * W[oc, ic, kh, kw]);
 
     return Y;
@@ -234,32 +242,36 @@ op flatten(
 
 # TODO: implement dilation
 op maxpool(
-    param tuple[int64, int64] STRIDES,
-    param tuple[int64, int64] PADDING,
-    param tuple[int64, int64] DILATION,
-    param tuple[int64, int64] KERNEL_SIZE,
+    param int64 STRIDES_X,
+    param int64 STRIDES_Y,
+    param int64 PADDING_X,
+    param int64 PADDING_Y,
+    param int64 DILATION_X,
+    param int64 DILATION_Y,
+    param int64 KERNEL_SIZE_X,
+    param int64 KERNEL_SIZE_Y,
     input float32[N, C, H, W] X
 ) -> output float32[
     N,
     C,
-    (H + 2 * PADDING.0 - DILATION.0 * (KERNEL_SIZE.0 - 1) - 1) // STRIDES.0 + 1,
-    (W + 2 * PADDING.1 - DILATION.1 * (KERNEL_SIZE.1 - 1) - 1) // STRIDES.1 + 1
+    (H + 2 * PADDING_Y - DILATION_Y * (KERNEL_SIZE_Y - 1) - 1) // STRIDES_Y + 1,
+    (W + 2 * PADDING_X - DILATION_X * (KERNEL_SIZE_X - 1) - 1) // STRIDES_X + 1
 ] {
     temp float32[
         N,
         C,
-        (H + 2 * PADDING.0 - DILATION.0 * (KERNEL_SIZE.0 - 1) - 1) // STRIDES.0 + 1,
-        (W + 2 * PADDING.1 - DILATION.1 * (KERNEL_SIZE.1 - 1) - 1) // STRIDES.1 + 1
+        (H + 2 * PADDING_Y - DILATION_Y * (KERNEL_SIZE_Y - 1) - 1) // STRIDES_Y + 1,
+        (W + 2 * PADDING_X - DILATION_X * (KERNEL_SIZE_X - 1) - 1) // STRIDES_X + 1
     ] Y;
 
     temp index[1:N] n;
     temp index[1:C] c;
-    temp index[1:KERNEL_SIZE.0] kh;
-    temp index[1:KERNEL_SIZE.1] kw;
-    temp index[1:(H + 2 * PADDING.0 - DILATION.0 * (KERNEL_SIZE.0 - 1) - 1) // STRIDES.0 + 1:STRIDES.0] oh;
-    temp index[1:(W + 2 * PADDING.1 - DILATION.1 * (KERNEL_SIZE.1 - 1) - 1) // STRIDES.1 + 1:STRIDES.1] ow;
+    temp index[1:KERNEL_SIZE_Y] kh;
+    temp index[1:KERNEL_SIZE_X] kw;
+    temp index[1:(H + 2 * PADDING_Y - DILATION_Y * (KERNEL_SIZE_Y - 1) - 1) // STRIDES_Y + 1:STRIDES_Y] oh;
+    temp index[1:(W + 2 * PADDING_X - DILATION_X * (KERNEL_SIZE_X - 1) - 1) // STRIDES_X + 1:STRIDES_X] ow;
 
-    temp float32[N, C, H + 2 * PADDING.0, W + 2 * PADDING.1] X_padded = _pad(PADDING, X);
+    temp float32[N, C, H + 2 * PADDING_Y, W + 2 * PADDING_X] X_padded = _pad(X, PADDING_X, PADDING_Y);
     Y[n, c, oh, ow] = max[kh, kw](X_padded[n, c, oh + kh, ow + kw]);
 
     return Y;
@@ -298,24 +310,27 @@ op softmax(
 # file: resnet.fhy
 # ----------------------------------------
 proc _conv3x3(
-    param tuple[int64, int64] STRIDES,
-    param tuple[int64, int64] DILATION,
+    param int64 STRIDES_X,
+    param int64 STRIDES_Y,
+    param int64 DILATION_X,
+    param int64 DILATION_Y,
     param int64 GROUPS,
-    input float32[N, IC, H, W] X,
+    input float32[N, IC, IH, IW] X,
     param float32[OC, IC // GROUPS, 3, 3] W,
-    output float32[N, OC, (H + 2 * DILATION.0 - 3) // STRIDES.0 + 1, (W + 2 * DILATION.1 - 3) // STRIDES.1 + 1] Y
+    output float32[N, OC, (IH + 2 * DILATION_Y - 3) // STRIDES_Y + 1, (IW + 2 * DILATION_X - 3) // STRIDES_X + 1] Y
 ) {
-    Y = conv(STRIDES, DILATION, DILATION, GROUPS, X, W);
+    Y = conv(STRIDES_X, STRIDES_Y, DILATION_X, DILATION_Y, DILATION_X, DILATION_Y, GROUPS, X, W);
 }
 
 proc _conv1x1(
-    param tuple[int64, int64] STRIDES,
+    param int64 STRIDES_X,
+    param int64 STRIDES_Y,
     param int64 GROUPS,
-    input float32[N, IC, H, W] X,
+    input float32[N, IC, IH, IW] X,
     param float32[OC, IC // GROUPS, 1, 1] W,
-    output float32[N, OC, (H - 1) // STRIDES.0 + 1, (W - 1) // STRIDES.1 + 1] Y
+    output float32[N, OC, (IH - 1) // STRIDES_Y + 1, (IW - 1) // STRIDES_X + 1] Y
 ) {
-    Y = conv(STRIDES, (0, 0), (1, 1), GROUPS, X, W);
+    Y = conv(STRIDES_X, STRIDES_Y, 0, 0, 1, 1, GROUPS, X, W);
 }
 
 proc basic_block_stride_eq_1(
@@ -337,10 +352,10 @@ proc basic_block_stride_eq_1(
     temp float32[N, C, H, W] bn2_Y;
     temp float32[N, C, H, W] add_Y;
 
-    _conv3x3((1, 1), (1, 1), 1, X, conv1_W, conv1_Y);
+    _conv3x3(1, 1, 1, 1, 1, X, conv1_W, conv1_Y);
     bn1_Y = batchnorm(conv1_Y, eps1, gamma1, beta1);
     relu1_Y = relu(bn1_Y);
-    _conv3x3((1, 1), (1, 1), 1, relu1_Y, conv2_W, conv2_Y);
+    _conv3x3(1, 1, 1, 1, 1, relu1_Y, conv2_W, conv2_Y);
     bn2_Y = batchnorm(conv2_Y, eps2, gamma2, beta2);
     add_Y = add(bn2_Y, X);
     Y = relu(bn2_Y);
@@ -377,14 +392,14 @@ proc basic_block_stride_neq_1(
     temp float32[N, C, CONV2_OH, CONV2_OW] bn3_Y;
     temp float32[N, C, CONV2_OH, CONV2_OW] add_Y;
 
-    _conv3x3((STRIDE, STRIDE), (1, 1), 1, X, conv1_W, conv1_Y);
+    _conv3x3(STRIDE, STRIDE, 1, 1, 1, X, conv1_W, conv1_Y);
     bn1_Y = batchnorm(eps1, gamma1, beta1, conv1_Y);
     relu1_Y = relu(bn1_Y);
 
-    _conv3x3((1, 1), (1, 1), 1, relu1_Y, conv2_W, conv2_Y);
+    _conv3x3(1, 1, 1, 1, 1, relu1_Y, conv2_W, conv2_Y);
     bn2_Y = batchnorm(eps2, gamma2, beta2, conv2_Y);
 
-    _conv1x1((STRIDE, STRIDE), 1, X, conv3_W, conv3_Y);
+    _conv1x1(STRIDE, STRIDE, 1, X, conv3_W, conv3_Y);
     bn3_Y = batchnorm(eps3, gamma3, beta3, conv3_Y);
 
     add_Y = add(bn2_Y, bn3_Y);
@@ -466,10 +481,10 @@ proc main(
     temp float32[N, 512] flatten_Y;
 
     # Initial operation sequence
-    conv1_Y = conv((2, 2), (3, 3), (1, 1), 1, X, conv1_W);
+    conv1_Y = conv(2, 2, 3, 3, 1, 1, 1, X, conv1_W);
     bn1_Y = batchnorm(conv1_Y, bn1_params.0, bn1_params.1, bn1_params.2);
     relu1_Y = relu(bn1_Y);
-    maxpool1_Y = maxpool((2, 2), (1, 1), (1, 1), (3, 3), relu1_Y);
+    maxpool1_Y = maxpool(2, 2, 1, 1, 1, 1, 3, 3, relu1_Y);
 
     # First set of basic blocks
     basic_block_stride_eq_1(
@@ -591,7 +606,7 @@ proc main(
     );
 
     # Final operation sequence
-    global_avg_pool_Y = avgpool(bb8_Y, (1, 1), (0, 0), (1, 1), (7, 7));
+    global_avg_pool_Y = avgpool(bb8_Y, 1, 1, 0, 0, 1, 1, 7, 7);
     flatten_Y = flatten(global_avg_pool_Y);
     Y = fc(flatten_Y, fc_W, fc_B);
 }
